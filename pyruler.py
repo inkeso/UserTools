@@ -27,6 +27,7 @@ class Ruler(Gtk.Window):
     DIMCOLOR =      (0.0, 0.0, 0.0, 0.3)    # Dim color to highlight selection
     LABELCOLOR =    (0.0, 0.0, 0.0, 0.5)    # Label background
     LABELTEXT =     (1.0, 1.0, 1.0, 1.0)    # Label text color
+    GRIPCOLOR =     (0.0, 0.5, 0.9, 0.5)    # Grip color
 
     def __init__(self, *args, **kwds):
         super(Ruler, self).__init__(*args, **kwds)
@@ -198,6 +199,35 @@ class Ruler(Gtk.Window):
             # vertical
             ctx.move_to(xtxt, y2 + txt.height/2)
             ctx.show_text("%d" % i)
+
+        # Draw horizontal resize grip
+        vx = self.w - self.GRIPSIZE if "west" in urnick else 0
+        vy = self.h - self.WIDTH if "south" in urnick else 0
+        pattern = cairo.LinearGradient(vx, 0, vx+self.GRIPSIZE, 0) 
+        pattern.add_color_stop_rgba(vx==0, *self.RULERCOLOR[:3], 0)
+        pattern.add_color_stop_rgba(vx!=0, *self.GRIPCOLOR)
+        ctx.rectangle(vx, vy, vx+self.GRIPSIZE, vy+self.WIDTH)
+        ctx.set_source(pattern)
+        ctx.fill()
+
+        # Draw vertical resize grip
+        vx = self.w - self.WIDTH if "east" in urnick else 0
+        vy = self.h - self.GRIPSIZE if "north" in urnick else 0
+        pattern = cairo.LinearGradient(0, vy, 0, vy+self.GRIPSIZE) 
+        pattern.add_color_stop_rgba(vy==0, *self.RULERCOLOR[:3], 0)
+        pattern.add_color_stop_rgba(vy!=0, *self.GRIPCOLOR)
+        ctx.rectangle(vx, vy, vx+self.WIDTH, vy+self.GRIPSIZE)
+        ctx.set_source(pattern)
+        ctx.fill()
+
+        # move-icon
+        res = "✥"
+        ctx.set_font_size(self.WIDTH/1.7)
+        ctx.set_source_rgba(*self.GRIPCOLOR)
+        txt = ctx.text_extents(res)
+        ctx.move_to(self.w-txt.width if "east" in urnick else 0, self.h if "south" in urnick else txt.height)
+        ctx.show_text(res)
+        
 
 
     def shadowtext(self, cx, cy, txt):
