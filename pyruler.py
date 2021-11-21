@@ -203,7 +203,7 @@ class Ruler(Gtk.Window):
         # Draw horizontal resize grip
         vx = self.w - self.GRIPSIZE if "west" in urnick else 0
         vy = self.h - self.WIDTH if "south" in urnick else 0
-        pattern = cairo.LinearGradient(vx, 0, vx+self.GRIPSIZE, 0) 
+        pattern = cairo.LinearGradient(vx, 0, vx+self.GRIPSIZE, 0)
         pattern.add_color_stop_rgba(vx==0, *self.RULERCOLOR[:3], 0)
         pattern.add_color_stop_rgba(vx!=0, *self.GRIPCOLOR)
         ctx.rectangle(vx, vy, vx+self.GRIPSIZE, vy+self.WIDTH)
@@ -213,7 +213,7 @@ class Ruler(Gtk.Window):
         # Draw vertical resize grip
         vx = self.w - self.WIDTH if "east" in urnick else 0
         vy = self.h - self.GRIPSIZE if "north" in urnick else 0
-        pattern = cairo.LinearGradient(0, vy, 0, vy+self.GRIPSIZE) 
+        pattern = cairo.LinearGradient(0, vy, 0, vy+self.GRIPSIZE)
         pattern.add_color_stop_rgba(vy==0, *self.RULERCOLOR[:3], 0)
         pattern.add_color_stop_rgba(vy!=0, *self.GRIPCOLOR)
         ctx.rectangle(vx, vy, vx+self.WIDTH, vy+self.GRIPSIZE)
@@ -227,7 +227,24 @@ class Ruler(Gtk.Window):
         txt = ctx.text_extents(res)
         ctx.move_to(self.w-txt.width if "east" in urnick else 0, self.h if "south" in urnick else txt.height)
         ctx.show_text(res)
-        
+
+        # menu-icon, todo: hover & menu
+        self.menubutton(ctx, self.GRIPCOLOR)
+
+    def menubutton(self, ctx, color):
+        urnick = self.ursprung.value_nick
+        res = {
+            "north-west":"◲", "north-east":"◱",
+            "south-west":"◳", "south-east":"◰"
+        }[urnick]
+        ctx.set_font_size(self.WIDTH/2)
+        ctx.set_source_rgba(*color)
+        txt = ctx.text_extents(res)
+        ctx.move_to(
+            self.w-txt.width - self.WIDTH/2 if "east" in urnick else self.WIDTH/2,
+            self.h-self.WIDTH+txt.height if "south" in urnick else self.WIDTH-txt.height/2
+        )
+        ctx.show_text(res)
 
 
     def shadowtext(self, cx, cy, txt):
@@ -328,6 +345,7 @@ class Ruler(Gtk.Window):
         return a string representing the zone (x,y) is in.
         """
         rx, ry = self.abs2rel(x,y)
+        if rx < 0 and rx > -self.WIDTH/2 and ry < 0 and ry > -self.WIDTH/2: return "mn" # menu-button
         if rx > 0 and ry > 0: return "cu"           # cursor/measurement area
         if rx < 0 and ry < 0: return "mv"           # move-area
         if ry < 0 and rx > self.w - self.WIDTH - self.GRIPSIZE: return "we" # west-east-resize-grip
@@ -350,6 +368,10 @@ class Ruler(Gtk.Window):
         ctx.set_source_rgba(*self.CURSORCOLOR)
 
         zone = self.getzone(ev.x, ev.y)
+        if zone == "mn":
+            self.menubutton(ctx, self.MARKERCOLOR)
+            self.area.get_window().set_cursor(Gdk.Cursor.new_from_name(self.get_display(), "context-menu"))
+
         # cursor in measurement-area
         if zone == "cu":
             ctx.move_to(int(ev.x)+0.5, 0)
@@ -377,7 +399,8 @@ class Ruler(Gtk.Window):
 
         # cursor in Corner (move)
         if zone == "mv":
-            self.area.get_window().set_cursor(Gdk.Cursor.new_from_name(self.get_display(), "grabbing"))
+            self.area.get_window().set_cursor(Gdk.Cursor.new_from_name(self.get_display(), "move"))
+            #self.area.get_window().set_cursor(Gdk.Cursor.new_from_name(self.get_display(), "grabbing"))
         if self.ismove:
             self.move(ev.x_root-self.ismove[0], ev.y_root-self.ismove[1])
 
@@ -422,6 +445,9 @@ class Ruler(Gtk.Window):
             # cursor in Corner (move)
             if zone == "mv":
                 self.ismove = (ev.x, ev.y)
+
+            if zone == "mn": 
+                self.menu.popup(None, None, None, None, ev.button, ev.time)
 
             # manual resize in corners.
             # horizontal resize. keep only x_root
