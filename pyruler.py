@@ -265,6 +265,8 @@ class Ruler(Gtk.Window):
         # self.k1 and .k2 are absolute coords
         w, h = self.w, self.h
         urnick = self.ursprung.value_nick
+        ctx.select_font_face(self.FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        ctx.set_font_size(self.FONTSIZE)
 
         if self.k1 is not None and self.k2 is not None:
             ctx.set_source_rgba(0, 0, 0, 0.3)
