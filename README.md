@@ -1,6 +1,9 @@
 Some simple tools for everyday-stuff.  
 Some ar Gtk-based, some are for terminal.
 
+Everything is independed of another, feel free to cherrypick. Also everything 
+is tiny so be shure to check the sourccode for customizations.
+
 ### `colorpicker.py`
 
 Just the Gtk3 colorpicker (but preset to the color in clipboard). Picked color 
@@ -48,6 +51,27 @@ optional arguments:
 Preview all font-files in current directory (or directory given as parameter)
 
 
+### watch.sh
+
+Needs _zsh_ and _expect_.
+
+Interactive alternative to shell builtin »watch« with a nicer interface, allowing for instant interval changes.
+It also handles complex commands a bit better. e.g.:
+```sh
+./watch.sh 'ls -l | tac'
+```
+
+```text
+Usage:
+ usage [options] command
+
+Options:
+  -b           beep if command has a non-zero exit
+  -e           exit if command has a non-zero exit
+  -n <secs>    seconds to wait between updates
+  -h           display this help and exit
+```
+
 ### `webkit.py`
 
 Just a window with a WebView (for your WebApp needs)
@@ -92,3 +116,10 @@ Use CSS to customize pages whenever you can. Custom JS tends to slow down
 startup/loading and is also applied only once on initial loading, not for any 
 subsequent page-loads (clicking on a link or something).
 Custom CSS is applied to every page.
+
+
+### x3.sh
+
+A simple shellscript for starting X11 without _startx_ and _xinit_, based on https://github.com/Earnestly/sx
+Launches `$HOME/.xinitrc` or any given script (given as 1. parameter).
+
