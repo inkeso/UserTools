@@ -13,8 +13,8 @@ class Ruler(Gtk.Window):
     WIDTH = 42              # Width of each ruler in pixels
     TICKS1 = WIDTH / 8      # Length of short tickmarks (every 2 pixels)
     TICKS2 = WIDTH / 5      # Length of middle tickmarks (every 10 pixels)
-    TICKS3 = WIDTH / 4      # Length of long tickmarks (every 50 pixels, at number)
-    GRIPSIZE = WIDTH / 3    # Size of (invisible) resize-grip at the edge of each ruler
+    TICKS3 = WIDTH / 3.5    # Length of long tickmarks (every 50 pixels, at number)
+    GRIPSIZE = WIDTH / 4    # Size of (invisible) resize-grip at the edge of each ruler
     STARTSIZE = WIDTH * 11  # Size of initial (square) window (one value for x == y)
 
     FONT = "Sans"   # Font used for Ruler & Label
@@ -194,7 +194,7 @@ class Ruler(Gtk.Window):
             xtxt = xoff - xinc * (self.TICKS3 + txt.width + 3) - (txt.width if xinc < 0 else 0)
             ytxt = yoff - yinc * (self.TICKS3 + txt.height/3) + (txt.height if yinc < 0 else 0)
             # horizontal
-            ctx.move_to(x2 + txt.width/2, ytxt)
+            ctx.move_to(x2 - txt.width/2, ytxt)
             ctx.show_text("%d" % i)
             # vertical
             ctx.move_to(xtxt, y2 + txt.height/2)
