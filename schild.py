@@ -8,9 +8,10 @@ borderstyles = {
     'single'    : { 'top' : "┌─┐", 'lr' : "│ │", 'btm' : "└─┘" },
     'double'    : { 'top' : "╔═╗", 'lr' : "║ ║", 'btm' : "╚═╝" },
     'thick'     : { 'top' : "▛▀▜", 'lr' : "▌ ▐", 'btm' : "▙▄▟" },
-    'underline' : { 'top' : "   ", 'lr'  : "   ", 'btm' : " ─ " },
-    'narrow'    : { 'top' : " ▁ ", 'lr'  : "▕ ▏", 'btm' : " ▔ " },
-    'ascii'     : { 'top' : ",-.", 'lr'  : "| |", 'btm' : "`-´" },
+    'underline' : { 'top' : "   ", 'lr' : "   ", 'btm' : " ─ " },
+    'strike'    : { 'top' : "   ", 'lr' : "»─«", 'btm' : "   " },
+    'narrow'    : { 'top' : " ▁ ", 'lr' : "▕ ▏", 'btm' : " ▔ " },
+    'ascii'     : { 'top' : ",-.", 'lr' : "| |", 'btm' : "`-´" },
     'slashes'   : { 'top' : ("//", "=" ,"//"), 'lr' : ("//", " ", "//"), 'btm' : ("//", "=" ,"//") },
     'slashstar' : { 'top' : ("/*", "*" ,"**"), 'lr' : ("**", " ", "**"), 'btm' : ("**", "*" ,"*/") },
     'octothorpe': { 'top' : ("##", "#" ,"##"), 'lr' : ("##", " ", "##"), 'btm' : ("##", "#" ,"##") },
@@ -75,10 +76,10 @@ def schild(txt, style, color, left=False, outer=False):
     borderwidth = 2 + len(b.lr[0]) + len(b.lr[2])
     
     if tco >= frt_width + borderwidth:
-        pad = "" if left else " " * ((tco - frt_width - borderwidth) // 2)
+        pad = "" if left else (b.lr[1] if outer else " ") * ((tco - frt_width - borderwidth) // 2)
         if outer:
             top = c.bc1 + b.top[0] + (b.top[1]*(frt_width + 2 + 2*len(pad))) + b.top[2]
-            bl =  c.bc2 + b.lr[0] + c.fc + " " + pad
+            bl =  c.bc2 + b.lr[0] + c.fc + pad + " "
             br =  " " + pad + reset + c.bg + c.bc1 + b.lr[2]
             btm = c.bc2 + b.btm[0] + (b.btm[1]*(frt_width + 2 + 2*len(pad))) + b.btm[2]
         else:

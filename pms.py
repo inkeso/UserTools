@@ -753,7 +753,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     pkg = Pkg()
     pkg.search(args.searchterm[0])
-
+    
     if args.json: pkg.to_json()
     elif args.csv: pkg.to_csv()
     elif args.ansi is not None:
@@ -762,6 +762,6 @@ if __name__ == '__main__':
         pkg.to_ansi(args.ansi)
         # same but without zebra-background:
         #for l in pkg.to_list(args.ansi): print("\n".join(l))    
-    else:
+    elif pkg.rows:
         ls = LineSelect(pkg)
         ls.main()

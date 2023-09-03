@@ -34,7 +34,7 @@ def fileorstring(stuff):
     res = stuff
     try:
         with open(stuff) as fi: res = "".join(fi.readlines())
-    except FileNotFoundError as e:
+    except (FileNotFoundError, OSError) as e:
         #sys.stderr.write(str(e)+", Assuming string\n")
         pass
     return res
