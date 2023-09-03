@@ -28,6 +28,7 @@ class Ruler(Gtk.Window):
     LABELCOLOR =    (0.0, 0.0, 0.0, 0.5)    # Label background
     LABELTEXT =     (1.0, 1.0, 1.0, 1.0)    # Label text color
     GRIPCOLOR =     (0.0, 0.5, 0.9, 0.5)    # Grip color
+    BACKGROUND =    (0.0, 0.0, 0.0, 0.1)    # Background-color
 
     def __init__(self, *args, **kwds):
         super(Ruler, self).__init__(*args, **kwds)
@@ -112,6 +113,7 @@ class Ruler(Gtk.Window):
         self.surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.w, self.h)
 
         ctx = cairo.Context(self.surface)
+        self.background(ctx)
         self.plotbars(ctx)
         self.plotcursors(ctx)
         self.surface.flush()
@@ -148,6 +150,12 @@ class Ruler(Gtk.Window):
         yoff = y if y is None else y + self.WIDTH if "north" in urnick else self.h - self.WIDTH - y
         return xoff, yoff
 
+
+    def background(self, ctx):
+        w, h = self.w, self.h
+        ctx.set_source_rgba(*self.BACKGROUND)
+        ctx.rectangle(0, 0, self.w, self.h)
+        ctx.fill()
 
     def plotbars(self, ctx):
         w, h = self.w, self.h

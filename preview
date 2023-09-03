@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# file list preview to be used with fd or locate...
+
+# Usage: 
+#   locate -i tfbs | $0
+#   fd -i tfbs | $0
+
+dofzf() {
+    fzf --no-sort \
+        --layout=reverse \
+        --border=none \
+        --info=inline \
+        --scrollbar="▒" \
+        --header-first \
+        --header 'F1: XDG | F2: geany | F3: localc | F4: gwenview | F5: okular | F7: mc | F8: doublecmd | F10: Quit' \
+        --preview-window  'border-left,~5' \
+        --preview='icat {}' \
+        --bind 'f1:execute:xdg-open {} &>/dev/null &' \
+        --bind 'f2:execute:geany {} &>/dev/null &' \
+        --bind 'f3:execute:localc {} &>/dev/null &' \
+        --bind 'f4:execute:gwenview {} &>/dev/null &' \
+        --bind 'f5:execute:okular {} &>/dev/null &' \
+        --bind 'f7:execute:_(){SHELL=/bin/bash ; [ -d "$1" ] && mc -x "$1" || mc -x "$(dirname "$1")"};_ {} &>/dev/null' \
+        --bind 'f8:execute:doublecmd -C {} &>/dev/null &' \
+        --bind 'f10:abort' \
+        --bind 'shift-down:preview-half-page-down' \
+        --bind 'shift-up:preview-half-page-up' \
+
+}
+
+
+
+RES="$(dofzf)"
+[ -z "$RES" ] && exit
+
+# to change directory, we need to use this as a function, not a shellscript
+#[ -d "$RES" ] && cd "$RES" || cd "$(dirname "$RES")" 
+lsd -l --color=always "$RES"

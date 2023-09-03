@@ -4,10 +4,12 @@ Some ar Gtk-based, some are for terminal.
 Everything is independed of another, feel free to cherrypick. Also everything 
 is tiny so be shure to check the sourccode for customizations.
 
+
 ### `colorpicker.py`
 
 Just the Gtk3 colorpicker (but preset to the color in clipboard). Picked color 
 will be written to stdout and clipboard (and primary). Needs xclip.
+
 
 ### `colorterminal.py`
 
@@ -18,6 +20,29 @@ usage: colorterminal.py [ 16 | 256 | rgb | all ]
 
 default is 16
 ```
+
+
+### jsonview.py
+
+A simple GUI JSON-Viewer (Gtk). Accepts files and stdin.
+
+
+### preview
+
+A shellscript wrapping fzf and some other tools for very convenient navigation 
+in various filelists.
+
+Eg. `fd -i 'filename' | preview` or `locate -i 'filename' | preview`
+
+
+### pms.py
+
+Search for packages with pacman.
+
+Show results in an interactive list, allowing for installation.
+
+Other output options are available (JSON, CSV).
+
 
 ### `pyruler.py`
 
@@ -122,4 +147,6 @@ Custom CSS is applied to every page.
 
 A simple shellscript for starting X11 without _startx_ and _xinit_, based on https://github.com/Earnestly/sx
 Launches `$HOME/.xinitrc` or any given script (given as 1. parameter).
+
+
 
