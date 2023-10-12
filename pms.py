@@ -459,8 +459,11 @@ class LineSelect():
         ]
         #self.footer = " | ".join(f"\033[38;5;123m{x[0]}\033[38;5;45m: {x[1]}\033[38;5;27m" for x in keys)
         self.footer = fg(" | ", 27).join(fg(x[0], 123) + fg(f": {x[1]}", 45) for x in keys)
-
-        self.cols, self.rows = os.get_terminal_size()
+        
+        try:
+            self.cols, self.rows = os.get_terminal_size()
+        except OSError:
+            self.cols, self.rows = 80, 25
 
         lines = self.pkg.to_list(self.cols-1) # bei langen listen dauert das!
         self.header = lines[0][0]
@@ -758,10 +761,16 @@ if __name__ == '__main__':
     elif args.csv: pkg.to_csv()
     elif args.ansi is not None:
         if args.ansi == 0: 
-            args.ansi = os.get_terminal_size().columns
+            try:
+                args.ansi = os.get_terminal_size().columns
+            except OSError:
+                args.ansi = 80
         pkg.to_ansi(args.ansi)
         # same but without zebra-background:
-        #for l in pkg.to_list(args.ansi): print("\n".join(l))    
+        #for l in pkg.to_list(args.ansi): print("\n".join(l))
     elif pkg.rows:
-        ls = LineSelect(pkg)
-        ls.main()
+        if sys.stdout.isatty() and sys.stdin.isatty():
+            ls = LineSelect(pkg)
+            ls.main()
+        else:
+            pkg.to_csv()
