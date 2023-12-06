@@ -653,7 +653,7 @@ class LineSelect():
                         self.header = lines[0][0]
                         self.items = lines[1:]
                         doresize = False
-                case 27:  # escape
+                case 27 | curses.KEY_F10:  # escape
                     result = None
                     loop = False
 
