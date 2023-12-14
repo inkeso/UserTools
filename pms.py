@@ -9,6 +9,7 @@ import json
 import shlex
 import curses
 import argparse
+import threading
 import subprocess
 import concurrent.futures
 from collections import namedtuple
@@ -129,6 +130,7 @@ class Style:
 class Pkg:
     Row = namedtuple("Row", "db pkg ver grps ins old desc")
     Col = namedtuple("Col", "db pkg ver grps desc")
+    Installed = {}  # cache dict of `pkgname` => "version" (see info())
     
 
     def __init__(self):
@@ -156,6 +158,20 @@ class Pkg:
             ds = max(len(r.desc) for r in self.rows)
             self._cols = Pkg.Col(db, pk, vr, gr, ds)
         return self._cols
+
+
+    @classmethod
+    def _get_installed(cls):
+        # Cache This!
+        if cls.Installed: return
+        cls.Installed = dict(x.split() for x in pacman(["-Q"]))
+        # "Provided" packagenames/version. Etwas langsamer.
+        for x in pacman(["-Qi"]):
+            if not x.startswith("Provides") or x.endswith("None"): continue
+            for y in x.split(" : ")[1].split():
+                pv = y.split("=")
+                if pv[0] not in cls.Installed:
+                    cls.Installed[pv[0]] = pv[1] if len(pv) > 1 else None
 
 
     def _get_foreign(self):
@@ -375,11 +391,16 @@ class Pkg:
         if not pacinfo: return [f"No such package »{name}«"]
 
         # header aus folgendem:
-        hfields = ("Repository", "Name", "Version", "Description", "Groups")
+        hfields = ("Repository", "Name", "Version", "Description", "Groups", "Licenses")
         # Dies sind Paketlisten und werden anders formatiert:
         plists = ("Depends On", "Required By", "Optional For", "Replaces", "Conflicts With")
 
-        installed = [x.split()[0] for x in pacman(["-Q"])]
+        if not cls.Installed: cls._get_installed()
+
+        # TODO: check version instead of ignoring
+        def nover(x):
+            return re.split("[<=>]", x, 1)[0]
+
         info = {}
         last = ""
         for l in pacinfo:
@@ -404,9 +425,9 @@ class Pkg:
                 if k == "Optional Deps":
                     odh = lw[0].split(": ", 1)
                     if len(odh) == 2:
-                        lw[0] = f"{fg(odh[0], Style.pkg if odh[0] not in installed else Style.ins)}: {odh[1]}"
+                        lw[0] = f"{fg(odh[0], Style.pkg if odh[0] not in cls.Installed else Style.ins)}: {odh[1]}"
                 elif k in plists:   # colorize package-list
-                    lw = columnize([(x, Style.pkg if x not in installed else Style.ins) for x in r.split()], width - CW)
+                    lw = columnize([(nover(x), Style.pkg if nover(x) not in cls.Installed else Style.ins) for x in r.split()], width - CW)
                     
                 txt += lw
             if not txt: continue
@@ -423,7 +444,7 @@ class Pkg:
         width = min(width, max(alen(x) for x in fancyinfo))
         
         result = [
-            fg(info['Name'], Style.pkg if info['Name'] not in installed else Style.ins) + " " +
+            fg(info['Name'], Style.pkg if info['Name'] not in cls.Installed else Style.ins) + " " +
             fg(info['Version'], Style.ver) + " " +
             " " * (width - len(info['Name'] + info['Version'] + info['Repository']) - 2) +
             fg(info['Repository'], Style.db)
@@ -696,6 +717,9 @@ class LineSelect():
         return result
 
     def main(self):
+        # start loading all installed packages in the background for pkg.info()
+        threading.Thread(target=pkg._get_installed).start()
+
         curses.set_escdelay(50)
         res = curses.wrapper(self.mainloop)
 
