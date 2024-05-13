@@ -33,16 +33,20 @@ def wrap(s, w):
         yield ' '.join(line_buf)
 
 
-def pacman(args):
-    """thin wrapper for calling pacman and returning its output"""
-    procrun = subprocess.run(["pacman"] + args,
+def pacman(args, binary="pacman"):
+    """thin wrapper for calling pacman (or something else) and returning its output"""
+    procrun = subprocess.run([binary] + args,
         encoding="utf-8", 
         env= dict(os.environ, LC_ALL="C"),
         capture_output=True
     )
-    if procrun.stderr:
-        sys.stderr.write(procrun.stderr)
-        sys.exit(200)
+    if procrun.stderr or procrun.returncode > 0:
+        raise subprocess.CalledProcessError(
+            procrun.returncode, 
+            " ".join([binary]+args), 
+            procrun.stdout, 
+            procrun.stderr
+        )
     return procrun.stdout.splitlines()
 
 
@@ -63,14 +67,14 @@ def alen(astr):
     return len(re.sub("\033\\[.*?m", "", astr))
 
 
-def columnize(lst, width=80):
+def columnize(lst, width=80, height=None):
     """
     display a list of strings in columns
     lst may be a list of strings or a list of tuples (str, fg-color) for formatting.
     (Or a mix of both)
+    if height is set, columns will be longer and probaböy fewer
     """
     # Anzahl möglicher Spalten berechnen bei max. Breite pro Spalte
-    
     lst = [(x, None) if type(x) is str else x for x in lst] 
     
     cwidth = max(len(x[0]) for x in lst)
@@ -82,6 +86,7 @@ def columnize(lst, width=80):
     else:
         # Zeilen berechnen.
         nrows = len(lst) // ncols + (len(lst) % ncols > 0)
+        if height and nrows < height: nrows = min(height, len(lst))
         cols = []   # columns
         for i in range(ncols):
             thiscol = lst[(i * nrows):((i + 1) * nrows)]
@@ -125,6 +130,10 @@ class Style:
     cursor = "44"
     scrollbar = "38;5;118;48;5;57"   # scrollbar-color (complete CSI)
     selected = "1;42", "1;41"        # highlight selected item
+    
+    # Colors for info-windows
+    infobg = 18
+    infoborder = 33
 
 
 class Pkg:
@@ -380,17 +389,56 @@ class Pkg:
 
     
     @classmethod
-    def info(cls, name, width=80):
+    def filelist(cls, name, width=80, height=25):
+        """
+        Show filelist for package. Needs pkgfile
+        """
+        last = ""
+        res = []
+        try:
+            packagefiles = pacman(["-Qlq", name])
+        except subprocess.CalledProcessError:
+            try:  # not installed: use pkgfile, if available
+                packagefiles = pacman(["-lq", name], "pkgfile")
+            except subprocess.CalledProcessError as spe:
+                err = [f"pkgfiles returned exitcode {spe.returncode}",""]
+                err += spe.stdout.splitlines() + spe.stderr.splitlines()
+                return columnize(err, width, height)
+            except FileNotFoundError:
+                return ["please install »pkgfile« to show files of noninstalled packages"]
+        if len(packagefiles) < 1: return ["Package contains no files"]
+
+        for s in packagefiles:
+            if s.endswith("/"): continue    # do not list plain directories
+            p, f = s.rsplit("/",1)
+            if p != last:
+                if last: res += [""]
+                last = p
+                res += [(p, Style.pkg)]
+            res += ["  " + f]
+        return columnize(res, width, height)
+
+
+    @classmethod
+    def info(cls, name, width=80, height=25):
         """
         show fancy package-info.
         Highlight installed packages.
         """
         if width < 40: return ["Width too small"]
-
-        pacinfo = pacman(["-Sii", name])
+        try:
+            pacinfo = pacman(["-Qi", name])
+        except subprocess.CalledProcessError:
+            try:  # maybe a foreign package
+                pacinfo = pacman(["-Sii", name])
+            except subprocess.CalledProcessError as spe:
+                err = [f"pacman returned exitcode {spe.returncode}",""]
+                err += spe.stdout.splitlines() + spe.stderr.splitlines()
+                return columnize(err, width, height)
+        
         if not pacinfo: return [f"No such package »{name}«"]
 
-        # header aus folgendem:
+        # ignore this (partly used in header):
         hfields = ("Repository", "Name", "Version", "Description", "Groups", "Licenses")
         # Dies sind Paketlisten und werden anders formatiert:
         plists = ("Depends On", "Required By", "Optional For", "Replaces", "Conflicts With")
@@ -442,12 +490,9 @@ class Pkg:
         
         # reduce width if possible
         width = min(width, max(alen(x) for x in fancyinfo))
-        
         result = [
             fg(info['Name'], Style.pkg if info['Name'] not in cls.Installed else Style.ins) + " " +
-            fg(info['Version'], Style.ver) + " " +
-            " " * (width - len(info['Name'] + info['Version'] + info['Repository']) - 2) +
-            fg(info['Repository'], Style.db)
+            fg(info['Version'], Style.ver) + " " * (width - len(info['Name'] + info['Version']) - 1)
         ]
         if "Groups" in info:
             result += [" "*width]
@@ -474,6 +519,7 @@ class LineSelect():
         self.pkg = pkg
         keys = [
             ["F1", "Pkg-Info"],
+            ["F2", "Pkg-Files"],
             ["Enter", "Accept"],
             ["Space", "Select"],
             ["Escape", "Abort"],
@@ -622,19 +668,26 @@ class LineSelect():
             if x in self.selected:  self.selected.remove(x)
             else:                   self.selected.add(x)
 
-        def showpkginfo():
+        def showinfo(infofun):
             pkgname = self.pkg.rows[self.cursor].pkg
-            nfo = Pkg.info(pkgname, self.cols - 4)
-            nr = min(len(nfo), self.rows - 2)
+            H = self.rows - 2
+            nfo = infofun(pkgname, self.cols - 4, H)
+            nr = min(len(nfo), H)
             nw = min(max(alen(x) for x in nfo), self.cols - 4)
             left = (self.cols - 4 - nw) // 2
             top = (self.rows - nr) // 2
 
             def output(offset=0):
-                sys.stdout.write(f"\033[{top};{left}H" + bg(fg(f"█▀{'▀' * nw}▀█", 33), 18))
+                out = sys.stdout.write
+                out(f"\033[{top};{left}H")
+                out(bg(fg(f"█▀{'▀' * nw}▀█", Style.infoborder), Style.infobg))
+                t, l = int(offset / len(nfo) * H), int((offset+H) / len(nfo) * H)
                 for i, r in enumerate(nfo[offset:(offset + nr)]):
-                    sys.stdout.write(f"\033[{top+i+1};{left}H" + bg(f"{fg('█', 33)} {r} {fg('█', 33)}", 18))
-                sys.stdout.write(f"\033[{top+i+2};{left}H" + bg(fg(f"█▄{'▄' * nw}▄█", 33), 18))
+                    prg = fg('▐' if i < t or i > l else '█', Style.infoborder)
+                    out(f"\033[{top+i+1};{left}H")
+                    out(bg(f"{fg('█', Style.infoborder)} {r} {prg}", Style.infobg))
+                out(f"\033[{top+i+2};{left}H")
+                out(bg(fg(f"█▄{'▄' * nw}▄█", Style.infoborder), Style.infobg))
                 sys.stdout.flush()
 
             keh = None
@@ -660,6 +713,7 @@ class LineSelect():
                 offset = max(0, offset)
                 offset = min(offset, len(nfo) - nr)
             scr.timeout(100)    # reset getch-timeout to 100
+
 
         scr.timeout(100)        # getch-timeout is used for delayed resize
         while loop:
@@ -693,14 +747,14 @@ class LineSelect():
                 case curses.KEY_END:    self.cursor = len(self.items) - 1       # 360
                 case curses.KEY_PPAGE:  self.offset, self.cursor = 0, fr        # 339
                 case curses.KEY_NPAGE:  self.offset, self.cursor = 2**63, tr    # 338
+                case curses.KEY_F1:     showinfo(Pkg.info)                      # 265
+                case curses.KEY_F2:     showinfo(Pkg.filelist)                  # 266
+                    
 
                 # jump to char
                 case x if 'a' <= chr(x).lower() <= 'z': # 97-122
                     new = self.findfirst(chr(x))
                     if new is not None: self.cursor = new
-
-                case curses.KEY_F1: # 265
-                    showpkginfo()
 
                 case curses.KEY_RESIZE: # 410
                     doresize = True
