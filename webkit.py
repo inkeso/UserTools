@@ -49,11 +49,10 @@ style = WebKit2.UserStyleSheet(
 manager.add_style_sheet(style)
 
 broz = WebKit2.WebView.new_with_user_content_manager(manager)
-broz.get_context()
 
 broz.vscroll = Gtk.ScrolledWindow(child=broz)
-broz.loadlabel = Gtk.Label(justify=Gtk.Justification.CENTER)
-broz.window = Gtk.Window(type=Gtk.WindowType(0), child=broz.loadlabel)
+broz.loadpb = Gtk.ProgressBar(fraction=0.0, show_text=True, valign=Gtk.Align.CENTER, halign=Gtk.Align.CENTER)
+broz.window = Gtk.Window(type=Gtk.WindowType(0), child=broz.loadpb)
 broz.window.connect("destroy", Gtk.main_quit)
 
 if not args.no_escape: # Exit on escape?
@@ -70,19 +69,30 @@ def click(widget, event):
     if event.button == 9 and broz.can_go_forward(): return not broz.go_forward()
 broz.connect("button-press-event", click)
 
-
 # Loading...
+broz.finished = False
 def ready(widget, event):
-    broz.loadlabel.set_label(broz.loadlabel.get_label() + "■")
-    if (event is WebKit2.LoadEvent.FINISHED):
-        broz.window.remove(broz.loadlabel)
-        broz.window.add(broz.vscroll)
-        broz.vscroll.show_all()
-        broz.window.set_focus(broz)
+    if event is WebKit2.LoadEvent.FINISHED:
+        broz.finished = True
         broz.disconnect(broz.onready)
-        if (args.javascript):
-            GLib.timeout_add(200, lambda: broz.run_javascript(fileorstring(args.javascript)))
+        return
 
+def loading():
+    fort = broz.get_estimated_load_progress()
+    broz.loadpb.set_fraction(fort)
+    if fort < 1 or not broz.finished: return True
+
+    # Switch to page, run JS
+    broz.window.remove(broz.loadpb)
+    broz.window.add(broz.vscroll)
+    broz.vscroll.show_all()
+    broz.window.set_focus(broz)
+    if (args.javascript): GLib.idle_add(
+        broz.evaluate_javascript, fileorstring(args.javascript), -1
+    )
+    return False
+
+GLib.timeout_add(100, loading)
 broz.onready = broz.connect("load-changed", ready)
 broz.load_uri(args.URL)
 broz.window.show_all()
