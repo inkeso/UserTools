@@ -4,7 +4,7 @@
 usage: pms [-h] [-j | -c | -a [width]] searchterm
 
 Search for packages with pacman and show results in an interactive list.
-Installed packages are highlighted/marked and available updates are shown as 
+Installed packages are highlighted/marked and available updates are shown as
 well.
 
 - scroll through the results using arrow keys, PageUp/PageDown, Home/End
@@ -16,7 +16,7 @@ well.
 - quit (F10 or Esc)
 
 If no option is given and stdout is a TTY, interactive mode will be started.
-If no option is given and stdout is NOT a TTY, a tab-separated table will be 
+If no option is given and stdout is NOT a TTY, a tab-separated table will be
 written. (like with -c)
 
 Other output options are available and mutually exclusive.
@@ -29,16 +29,16 @@ options:
   -j, --json            output result as JSON
   -c, --csv             output result as tab-separated table
   -a [width], --ansi [width]
-                        output result pretty formated and colored. if width is 
-                        not specified or 0, autodetection will be tried. If 
+                        output result pretty formated and colored. if width is
+                        not specified or 0, autodetection will be tried. If
                         stdout is not a terminal, width will default to 80.
 
 Search for packages with pacman.
 
 Show results as:
  a nice ANSI-formated table (  -a [width], --ansi [width]
-                        output result pretty formated and colored. if width is 
-                        not specified or 0, autodetection will be tried. If 
+                        output result pretty formated and colored. if width is
+                        not specified or 0, autodetection will be tried. If
                         stdout is not a terminal, width will default to 80.
 """
 import os
@@ -668,9 +668,9 @@ class LineSelect():
         # check if cursor is in view. scroll if neccessary
         maxh = self.rows - 2  # (header & footer)
         crow = sum(len(x) for x in self.items[:self.cursor] or [[]])
-        if crow < self.offset + Style.scroll_padding: 
+        if crow < self.offset + Style.scroll_padding:
             self.offset = crow - Style.scroll_padding
-        if crow > self.offset + maxh - Style.scroll_padding - 1: 
+        if crow > self.offset + maxh - Style.scroll_padding - 1:
             self.offset = crow - maxh + Style.scroll_padding + 1
 
 
@@ -805,7 +805,7 @@ class LineSelect():
             infotafel = True
             offset = 0
             # no resize-support, so getch may as well block
-            scr.timeout(-1) 
+            scr.timeout(-1)
             while infotafel:
                 output(offset)
                 keh = scr.getch()
@@ -937,19 +937,18 @@ if __name__ == '__main__':
             return ''.join("\n".join(wrap(p, w))+'\n' for p in t.split('\n\n'))
 
     parser = argparse.ArgumentParser(formatter_class=MultiForm, description="""
-        Search for packages with pacman and show results in an interactive 
-        list. Installed packages are highlighted/marked and available updates 
+        Search for packages with pacman and show results in an interactive
+        list. Installed packages are highlighted/marked and available updates
         are shown as well.
 
-        If no option is given and stdout is a TTY, interactive mode will be 
+        If no option is given and stdout is a TTY, interactive mode will be
         started.
 
-        If no option is given and stdout is NOT a TTY, a tab-separated table 
+        If no option is given and stdout is NOT a TTY, a tab-separated table
         will be written. (like with -c)
 
         Other output options are available and mutually exclusive.
     """)
-
     parser.add_argument("searchterm", type=str, nargs=1, help="regex to search for")
     group = parser.add_mutually_exclusive_group()
 
@@ -964,13 +963,19 @@ if __name__ == '__main__':
         if width is not specified or 0, autodetection will be tried.
         If stdout is not a terminal, width will default to 80.
     """)
-
+    group.add_argument("-i", "--info", action="store_true", help="""
+        Show package info instead of searchresults. 
+        Searchterm must be the exact packagename (or yield exactly one result)
+    """)
     args = parser.parse_args()
 
-    # Use better colors, if available
-    if sys.stdout.isatty() and sys.stdin.isatty():
+    # Use better colors, if available and detect terminal size
+    w, h, tty = 80, 25, (sys.stdout.isatty() and sys.stdin.isatty())
+    if tty:
         curses.setupterm()
         if curses.tigetnum("colors") > 16: Style = Style256
+        ts = os.get_terminal_size()
+        w, h = ts.columns, ts.lines
 
     pkg = Pkg()
     pkg.search(args.searchterm[0])
@@ -978,18 +983,18 @@ if __name__ == '__main__':
 
     if args.json: pkg.to_json()
     elif args.csv: pkg.to_csv()
+    elif args.info:
+        if len(pkg.rows) > 1:
+            pkg.rows = [x for x in pkg.rows if x.pkg==args.searchterm[0]]
+        if len(pkg.rows) != 1:
+            print("Error: Package not found")
+            sys.exit(1)
+        nfo = pkg.info(pkg.rows[0].pkg, w, h)
+        lst = pkg.filelist(pkg.rows[0].pkg, w, max(h-len(nfo)-7, 1))
+        print("\n"+"\n".join(nfo+["","\x1b[97;1mFiles:\x1b[m",""]+lst)+"\n")
     elif args.ansi is not None:
-        if args.ansi == 0:
-            try:
-                args.ansi = os.get_terminal_size().columns
-            except OSError:
-                args.ansi = 80
-        pkg.to_ansi(args.ansi)
-        # same but without zebra-background:
-        #for l in pkg.to_list(args.ansi): print("\n".join(l))
-    elif pkg.rows:
-        if sys.stdout.isatty() and sys.stdin.isatty():
-            ls = LineSelect(pkg)
-            ls.main()
-        else:
-            pkg.to_csv()
+        if args.ansi > 0: w = args.ansi
+        pkg.to_ansi(w)
+    else:
+        if tty: LineSelect(pkg).main()
+        else: pkg.to_csv()
