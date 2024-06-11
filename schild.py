@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import sys, argparse
+import re, sys, argparse
 
 # define styles & colors
 borderstyles = {
-    # TODO: Braile single (innen/außen) und double
     'single'    : { 'top' : "┌─┐", 'lr' : "│ │", 'btm' : "└─┘" },
     'double'    : { 'top' : "╔═╗", 'lr' : "║ ║", 'btm' : "╚═╝" },
     'thick'     : { 'top' : "▛▀▜", 'lr' : "▌ ▐", 'btm' : "▙▄▟" },
@@ -57,20 +56,25 @@ class objectify(object):
     def __init__(self, d):
         self.__dict__ = d
 
+SGR = re.compile("\x1b\\[([0-9;]*?m|K)")
+def wlen(s): return len(SGR.sub("", s))
+
 def schild(txt, style, color, left=False, outer=False):
+        
     frt = "".join(txt) #.strip()
     #frt = frt.decode("utf-8") # only needed for python 2
     # remove final linebreak
     if frt[-1:] == "\n": frt = frt [:-1]
     frt = frt.replace("\t", "    ").split('\n')
     frt_width = 0
-    for line in frt: frt_width = max(len(line),frt_width)
+    for line in frt: frt_width = max(wlen(line),frt_width)
     b = objectify(borderstyles[style])
-    c = objectify(bordercolors[color])
-    if color == "none": 
+    if color is None: 
         reset, clear = "", ""
+        c = objectify(bordercolors["none"])
     else:
         reset, clear = "\033[0m", "\033[K"
+        c = objectify(color)
     try:
         import curses
         curses.setupterm()
@@ -99,14 +103,26 @@ def schild(txt, style, color, left=False, outer=False):
 
     r = c.bg + top + clear + reset + "\n"
     for line in frt:
-        r += c.bg + bl + line.ljust(min(tco,frt_width)) + br + clear + reset + "\n"
+        line += " " * (min(tco,frt_width) - wlen(line))
+        r += c.bg + bl + line + br + clear + reset + "\n"
     r += c.bg + btm + clear + reset + "\n"
     return(r)
 
 def main():
     parser = argparse.ArgumentParser(description='Pipe some text into this program to make a fancy sign.')
     parser.add_argument('-b', '--border',  choices=borderstyles.keys(), default='single' , help='Use a different border')
-    parser.add_argument('-c', '--color',   choices=bordercolors.keys(), default='cyan' , help='Use a different color')
+    parser.add_argument('-c', '--color',   choices=bordercolors.keys(), default='cyan' , help='Use a different color preset')
+    
+    cc = parser.add_argument_group("custom colors", 
+    "colors are gives as ANSI-colorcodes without Esc[ and m at the end."
+    "\nDefault colors are: -bc1 1;36 -bc2 1;36 -fc 0;93"
+    "\nYou may use a preset and override single color(s)"
+    )
+    cc.add_argument('-bc1','--bordercolor1', type=str, help='Custom color: Border top/right')
+    cc.add_argument('-bc2','--bordercolor2', type=str, help='Custom color: Border bottom/left')
+    cc.add_argument('-fc', '--forecolor',    type=str, help='Custom color: Text')
+    cc.add_argument('-bg', '--background',   type=str, help='Custom color: Background')
+    
     parser.add_argument('-d', '--demo',    action='store_true', help='Show all borders and colors')
     parser.add_argument('-l', '--left',    action='store_true', help='Align left (do not center)')
     parser.add_argument('-o', '--outer',   action='store_true', help='large sign: border as wide as the screen')
@@ -114,8 +130,15 @@ def main():
     if args.demo:
         demo()
         sys.exit(0)
+    
+    color = None
+    if args.color != "none": color = bordercolors[args.color].copy()
+    if args.bordercolor1 is not None: color['bc1'] = "\033["+args.bordercolor1+"m"
+    if args.bordercolor2 is not None: color['bc2'] = "\033["+args.bordercolor2+"m"
+    if args.forecolor    is not None: color['fc']  = "\033["+args.forecolor+"m"
+    if args.background   is not None: color['bg']  = "\033["+args.background+"m"
 
-    sys.stdout.write(schild(sys.stdin.readlines(), args.border, args.color, args.left, args.outer))
+    sys.stdout.write(schild(sys.stdin.readlines(), args.border, color, args.left, args.outer))
 
 if __name__ == '__main__':
     main()
