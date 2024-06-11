@@ -5,12 +5,17 @@ import sys, argparse
 
 # define styles & colors
 borderstyles = {
+    # TODO: Braile single (innen/außen) und double
     'single'    : { 'top' : "┌─┐", 'lr' : "│ │", 'btm' : "└─┘" },
     'double'    : { 'top' : "╔═╗", 'lr' : "║ ║", 'btm' : "╚═╝" },
     'thick'     : { 'top' : "▛▀▜", 'lr' : "▌ ▐", 'btm' : "▙▄▟" },
+    'thickin'   : { 'top' : "▗▄▖", 'lr' : "▐ ▌", 'btm' : "▝▀▘" },
     'underline' : { 'top' : "   ", 'lr' : "   ", 'btm' : " ─ " },
     'strike'    : { 'top' : "   ", 'lr' : "»─«", 'btm' : "   " },
     'narrow'    : { 'top' : " ▁ ", 'lr' : "▕ ▏", 'btm' : " ▔ " },
+    'brailin'   : { 'top' : "⢀⠤⡀", 'lr' : "⢸ ⡇", 'btm' : "⠈⠒⠁" },
+    'brailout'  : { 'top' : "⡎⠉⢱", 'lr' : "⡇ ⢸", 'btm' : "⢇⣀⡸" },
+    'braille'   : { 'top' : "⣾⠛⣷", 'lr' : "⣿ ⣿", 'btm' : "⢿⣤⡿" },
     'ascii'     : { 'top' : ",-.", 'lr' : "| |", 'btm' : "`-´" },
     'slashes'   : { 'top' : ("//", "=" ,"//"), 'lr' : ("//", " ", "//"), 'btm' : ("//", "=" ,"//") },
     'slashstar' : { 'top' : ("/*", "*" ,"**"), 'lr' : ("**", " ", "**"), 'btm' : ("**", "*" ,"*/") },
@@ -44,7 +49,7 @@ def demo():
             d += schild("--border "+s+" --color "+c, s, c) + "\n"
     else:
         for s in borderstyles.keys(): d += schild("--border "+s, s, "none") + "\n"
-        for s in bordercolors.keys(): d += schild("--border narrow --left --color "+s, "narrow", s, True) + "\n"
+        for s in bordercolors.keys(): d += schild("--color "+s, "thickin", s) + "\n"
     sys.stdout.write(d)
 
 
