@@ -47,8 +47,8 @@ def demo():
         for s,c in zip(borderstyles.keys(), bordercolors.keys()):
             d += schild("--border "+s+" --color "+c, s, c) + "\n"
     else:
-        for s in borderstyles.keys(): d += schild("--border "+s, s, "none") + "\n"
-        for s in bordercolors.keys(): d += schild("--color "+s, "thickin", s) + "\n"
+        for s in borderstyles.keys(): d += schild("--border "+s, s, None) + "\n"
+        for s in bordercolors.keys(): d += schild("--color "+s, "thickin", bordercolors[s]) + "\n"
     sys.stdout.write(d)
 
 
@@ -118,21 +118,26 @@ def main():
     "\nDefault colors are: -bc1 1;36 -bc2 1;36 -fc 0;93"
     "\nYou may use a preset and override single color(s)"
     )
-    cc.add_argument('-bc1','--bordercolor1', type=str, help='Custom color: Border top/right')
-    cc.add_argument('-bc2','--bordercolor2', type=str, help='Custom color: Border bottom/left')
-    cc.add_argument('-fc', '--forecolor',    type=str, help='Custom color: Text')
-    cc.add_argument('-bg', '--background',   type=str, help='Custom color: Background')
+    cc.add_argument('-bc', '--bordercolor',  type=str, help='Set both bordercolors at the same time')
+    cc.add_argument('-bc1','--bordercolor1', type=str, help='Border top/right')
+    cc.add_argument('-bc2','--bordercolor2', type=str, help='Border bottom/left')
+    cc.add_argument('-fc', '--forecolor',    type=str, help='Text')
+    cc.add_argument('-bg', '--background',   type=str, help='Background')
     
     parser.add_argument('-d', '--demo',    action='store_true', help='Show all borders and colors')
     parser.add_argument('-l', '--left',    action='store_true', help='Align left (do not center)')
     parser.add_argument('-o', '--outer',   action='store_true', help='large sign: border as wide as the screen')
     args = parser.parse_args()
+
     if args.demo:
         demo()
         sys.exit(0)
     
     color = None
     if args.color != "none": color = bordercolors[args.color].copy()
+    if args.bordercolor  is not None: 
+        color['bc1'] = "\033["+args.bordercolor+"m"
+        color['bc2'] = "\033["+args.bordercolor+"m"
     if args.bordercolor1 is not None: color['bc1'] = "\033["+args.bordercolor1+"m"
     if args.bordercolor2 is not None: color['bc2'] = "\033["+args.bordercolor2+"m"
     if args.forecolor    is not None: color['fc']  = "\033["+args.forecolor+"m"
