@@ -11,6 +11,7 @@ Options:
   -b           beep if command has a non-zero exit
   -e           exit if command has a non-zero exit
   -n <secs>    seconds to wait between updates
+  -t           no title
   -h           display this help and exit
 "
 }
@@ -18,7 +19,7 @@ Options:
 INT=2
 XIT=?
 
-zparseopts -D -E -- b=xbeep e=xexit n:=xint h=xhelp
+zparseopts -D -E -- b=xbeep e=xexit n:=xint h=xhelp t=notitle
 
 CMD="$@"
 
@@ -59,7 +60,13 @@ DOIT() {
 if which unbuffer >/dev/null ; then
     TMP="$(mktemp /tmp/watch_XXXX)"
     DOIT() {
-        echo -en "\e[2H" # jump to second line
+        if [ -n "$notitle" ] ; then
+            echo -en "\e[H" # jump to first line
+        else
+            echo -en "\e[2;${LINES}r" # do not scroll first row
+            echo -en "\e[2H" # jump to second line  
+        fi
+        
         unbuffer zsh -c $CMD &> "$TMP"
         ret=$?
         sed 's/$/[0K/' "$TMP"
@@ -121,18 +128,18 @@ trap 'finally' SIGINT
 
 # MAIN LOOP
 while true; do
-    echo -en "\e[2;${LINES}r" # do not scroll first row
     DOIT
     XIT=$?
-    echo -ne "\e[s" # save cursor
-    status
-    echo -ne "\e[u" # restore cursor
-    
+    if [ -z "$notitle" ] ; then
+        echo -ne "\e[s" # save cursor
+        status
+        echo -ne "\e[u" # restore cursor
+    fi
     if [ $XIT -ne 0 -a -n "$xbeep" ] ; then
         echo -en "\a"
     fi
     if [ $XIT -ne 0 -a -n "$xexit" ] ; then
-        status
+        [ -z "$notitle" ] && status
         break
     fi
     
