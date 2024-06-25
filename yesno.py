@@ -128,6 +128,7 @@ class Confirm:
                     O.write("\x1b[K")
                 case _:
                     if k in self.hotkeys:
+                        i = self.hotkeys[k]
                         self.result = i, self.options[i][0]
                         self.active = i
                     else:
@@ -196,8 +197,8 @@ examples:
     a_idx, a_str = yesno.getanswer()
 
     outstr = []
-    if args.index: oustr.append(str(a_idx))
-    if args.string: oustr.append(str(a_str))
-    if outstr: sys.stdout(" ".join(outstr))
+    if args.index: outstr.append(str(a_idx))
+    if args.string: outstr.append(str(a_str))
+    if outstr: sys.stdout.write(" ".join(outstr))
 
     sys.exit(255 if a_idx < 0 else a_idx)
