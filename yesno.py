@@ -43,11 +43,17 @@ def getcursorposition():
 
 O = sys.stderr
 class Confirm:
-    BorderChars = [ " ▁ " ,
-                    "▕ ▏" ,
-                    " ▔ " ]
+    BorderChars = {
+        'narrow':  [" ▁ ", "▕ ▏", " ▔ "],
+        'single':  ["┌─┐", "│ │", "└─┘"],
+        'double':  ["╔═╗", "║ ║", "╚═╝"],
+        'thick':   ["▄▄▄", "█ █", "▀▀▀"],
+        'braille': ["⢀⣀⡀", "⢸ ⡇", "⠈⠉⠁"],
+        'ascii':   [",-.", "| |", "`-´"],
+        'none':    ["",    "",    ""],    # special: only use one row
+    }
 
-    def __init__(self, options=(("Yes", 2), ("No", 1)), prefix="", default=0, border=True):
+    def __init__(self, options=(("Yes", 2), ("No", 1)), prefix="", default=0, border='narrow'):
         self.__active = None
         self.options = options
         self.bwidth = max(len(x[0]) for x in self.options)
@@ -57,7 +63,7 @@ class Confirm:
         self.border = border
 
         # cursor positioning incl. fallback
-        lines = 1 + 2*border
+        lines = 1 + 2*(border!="none")
         cr = getcursorposition()[1]
         if cr > 0:  # absolute positioning needs "prescrolling"
             O.write("\n"*lines)
@@ -66,9 +72,9 @@ class Confirm:
             self.startrow = f"\x1b[{cr}H"
             self.endrow = f"\x1b[{ce}H"
         else:       # cursor position could not be determined: use relative positioning
-            self.startrow = "\r" if not border else f"\x1b[A\r"
-            self.endrow = "\n"*(1 + border)
-            if border: O.write("\n")
+            self.startrow = "\r" if border=="none" else f"\x1b[A\r"
+            self.endrow = "\n"*(1 + (border!="none"))
+            if border!="none": O.write("\n")
 
         # try to auto-assign hotkeys
         self.hotkeys = {}
@@ -89,16 +95,16 @@ class Confirm:
         self.__active = v % len(self.options)
 
 
-    def render(self, final=False):
-        B = Confirm.BorderChars if self.border else [""]*3
+    def render(self):
+        B = Confirm.BorderChars[self.border]
         displ = [" "*len(self.prefix), self.prefix, " "*len(self.prefix)]
         for i, (ostr, ocol) in enumerate(self.options):
             drk = f"\x1b[0;3{ocol}m"
             brg = f"\x1b[0;9{ocol}m"
-            face = "\x1b[m" if self.border else f"\x1b[0;3{ocol}m"
-            if i == self.active:
+            face = "\x1b[m" if self.border!="none" else f"\x1b[0;3{ocol}m"
+            if (i == self.active and not self.result) or (self.result and i == self.result[0]):
                 face = f"\x1b[4{ocol};{self.highlight}m"
-                if final: drk, brg = brg, drk
+                if self.result: drk, brg = brg, drk
             buttonlabl = f" {ostr:^{self.bwidth}} "
             if i in self.syektoh:
                 c = self.syektoh[i]
@@ -107,8 +113,8 @@ class Confirm:
             displ[1] += f"{brg}{B[1][0:1]}{face}{buttonlabl}{drk}{B[1][2:3]}\x1b[m "
             displ[2] += f"{drk}{B[2][0:2]}{B[2][1:2]*self.bwidth}{B[2][1:3]}\x1b[m "
         O.write(self.startrow)
-        O.write("\n".join(displ)+"\x1b[A" if self.border else displ[1])
-        if final: O.write(self.endrow)
+        O.write("\n".join(displ)+"\x1b[A" if self.border!="none" else displ[1])
+        if self.result: O.write(self.endrow)
         O.flush()
 
 
@@ -133,7 +139,7 @@ class Confirm:
                     else:
                         O.write("  unkown key "+repr(k))
             O.write("\x1b[K")
-        self.render(True)
+        self.render()
         return self.result
 
 
@@ -173,7 +179,7 @@ examples:
         formatter_class=RawDefFormatter
     )
     parser.add_argument("prefix",          type=str, nargs="?",  default="",            help="Print question bevor choice")
-    parser.add_argument("-n", "--noborder", action="store_true", default=False,         help="No border around buttons, (1 line instead of 3)")
+    parser.add_argument("-b", "--border",  choices=Confirm.BorderChars.keys(), default='narrow', help="Use different border. ")
     parser.add_argument("-o", "--options", type=str, nargs="*",  default=("Yes", "No"), help="Options to choose from")
     parser.add_argument("-c", "--colors",  type=str, nargs="*",  default=(2,1),         help="Colors for each option (0-7)")
     parser.add_argument("-d", "--default", type=int,             default=0,             help="Index of preselected item")
@@ -192,7 +198,7 @@ examples:
         tuple(zip(args.options, args.colors)),
         args.prefix,
         args.default,
-        not args.noborder
+        args.border
     )
     a_idx, a_str = yesno.getanswer()
 
