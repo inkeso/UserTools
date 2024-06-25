@@ -117,7 +117,7 @@ class Confirm:
             self.render()
             match k := getch():
                 case '\x03' | '\x1b\x1b':
-                    O.write("Cancelled\x1b[K")
+                    O.write("Cancelled")
                     self.result = -1, ""
                 case 'Up' | 'Left':
                     self.active -= 1
@@ -125,14 +125,14 @@ class Confirm:
                     self.active += 1
                 case '\r' | '\n' | ' ':
                     self.result = self.active, self.options[self.active][0]
-                    O.write("\x1b[K")
                 case _:
                     if k in self.hotkeys:
                         i = self.hotkeys[k]
                         self.result = i, self.options[i][0]
                         self.active = i
                     else:
-                        O.write("  unkown key "+repr(k)+"\x1b[K")
+                        O.write("  unkown key "+repr(k))
+            O.write("\x1b[K")
         self.render(True)
         return self.result
 
