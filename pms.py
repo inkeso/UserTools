@@ -3,7 +3,7 @@
 """
 usage: pms [-h] [-j | -c | -a [width]] searchterm
 
-Search for packages with pacman and show results in an interactive list.
+Search for packages with pacman or apt and show results in an interactive list.
 Installed packages are highlighted/marked and available updates are shown as
 well.
 
@@ -33,13 +33,6 @@ options:
                         not specified or 0, autodetection will be tried. If
                         stdout is not a terminal, width will default to 80.
 
-Search for packages with pacman.
-
-Show results as:
- a nice ANSI-formated table (  -a [width], --ansi [width]
-                        output result pretty formated and colored. if width is
-                        not specified or 0, autodetection will be tried. If
-                        stdout is not a terminal, width will default to 80.
 """
 import os
 import re
@@ -99,6 +92,7 @@ class Style:
     footertxt = 6
 
 
+
 # Better colors, if terminal is capable
 class Style256(Style):
     zebra      = "48;5;233", "48;5;234"
@@ -135,8 +129,21 @@ def wrap(s, w):
         yield ' '.join(line_buf)
 
 
-def pacman(args, binary="pacman"):
-    """thin wrapper for calling pacman (or something else) and returning its output"""
+def wrapml(s, w):
+    """Same, but keep linebreaks"""
+    result = []
+    for l in s.split("\n"): result += wrap(l, w)
+    return result
+
+
+def byte2hr(size):  # binary prefixes
+    if size < 1024: return f'{size} B'
+    f = (len(bin(size))-3) // 10
+    return f'{size/(1<<10*f):.2f} {" KMGTPEZY"[f]}iB'
+
+
+def cmd(binary, args):
+    """thin wrapper for calling a program and returning its output"""
     procrun = subprocess.run([binary] + args,
         encoding="utf-8",
         env= dict(os.environ, LC_ALL="C"),
@@ -145,16 +152,27 @@ def pacman(args, binary="pacman"):
     if procrun.stderr or procrun.returncode > 0:
         raise subprocess.CalledProcessError(
             procrun.returncode,
-            " ".join([binary]+args),
+            " ".join([binary] + args),
             procrun.stdout,
             procrun.stderr
         )
     return procrun.stdout.splitlines()
 
 
-def sudopacman(args, binary="pacman"):
-    """interactive pacman with sudo"""
+def sudocmd(binary, args):
+    """interactive command with sudo"""
     os.system(shlex.join(["sudo", binary] + args))
+
+
+def checkcmd(binary):
+    """
+    Simple & stupid way to check if a binary is available:
+    assume each command contains it's own name in the first few lines of its
+    own usage info. This is a bit slow, because the binary is actually spawned.
+    But this way we make sure it's not only present but also is working.
+    """
+    try:    return binary in "\n".join(cmd(binary, ["-h"])[:3])
+    except: return False
 
 
 def csi(code=""): return f"\033[{code}m"
@@ -191,9 +209,9 @@ def columnize(lst, width=80, height=None):
     (Or a mix of both)
     if height is set, columns will be longer and probaböy fewer
     """
-    # Anzahl möglicher Spalten berechnen bei max. Breite pro Spalte
+    # Calculate number of columns with max. width per column
     lst = [(x, None) if type(x) is str else x for x in lst]
-
+    if len(lst) < 1: return []
     cwidth = max(len(x[0]) for x in lst)
     ncols = min(len(lst), width // (cwidth + 2))
     res = []
@@ -201,7 +219,7 @@ def columnize(lst, width=80, height=None):
         for l in lst:
             res += [fg(f"{w:{width}}", l[1]) for w in wrap(l[0], width)]
     else:
-        # Zeilen berechnen.
+        # calculate rows
         nrows = len(lst) // ncols + (len(lst) % ncols > 0)
         if height and nrows < height: nrows = min(height, len(lst))
         cols = []   # columns
@@ -221,14 +239,14 @@ def columnize(lst, width=80, height=None):
     return res
 
 
+
 #┌─────────────────────────────────────────────────────────────────────────────┐
-#│                            PACKAGE LIST AND INFO                            │
+#│                       PACKAGE LIST AND INFO, Generic                        │
 #└─────────────────────────────────────────────────────────────────────────────┘
 class Pkg:
     Row = namedtuple("Row", "db pkg ver grps ins old desc")
     Col = namedtuple("Col", "db pkg ver grps desc")
     Installed = {}  # cache dict of `pkgname` => "version" (see info())
-
 
     def __init__(self):
         # convenience
@@ -254,74 +272,6 @@ class Pkg:
                 max(len(r.desc) for r in self.rows)
             )
         return self._cols
-
-
-    @classmethod
-    def _get_installed(cls):
-        # Cache This!
-        if cls.Installed: return
-        cls.Installed = dict(x.split() for x in pacman(["-Q"]))
-        # "Provided" packagenames/version. Etwas langsamer.
-        for x in pacman(["-Qi"]):
-            if not x.startswith("Provides") or x.endswith("None"): continue
-            for y in x.split(" : ")[1].split():
-                pv = y.split("=")
-                if pv[0] not in cls.Installed:
-                    cls.Installed[pv[0]] = pv[1] if len(pv) > 1 else None
-
-
-    def _get_foreign(self):
-        """
-        search foreign packages, returns results.
-        Do not use. Use search() instead.
-        """
-        rows = []
-        cur = {}
-        for l in pacman(["-Qmi"]):
-            if l:       # collect info
-                if ":" not in l: continue
-                cur.update(((x.strip() for x in l.split(":", 1)),))
-            elif cur:   # new entry is about to start
-                cur['Groups'] = cur['Groups'].replace('None', '')
-                gr_ds = f"{cur['Groups']} {cur['Name']} {cur['Description']}"
-                if self.regex.search(gr_ds):
-                    rows += [Pkg.Row(Style.ext_str, cur["Name"], cur["Version"],
-                        cur["Groups"] or None, "installed", None, cur["Description"]
-                    )]
-                cur = {}
-        return rows
-
-
-    def _get_sync(self):
-        """
-        search in repos, returns results.
-        Do not use. Use search() instead.
-        """
-        # repack 2 consecutive lines
-        try:
-            pm = pacman(["-Ss", self.regex.pattern])
-        except subprocess.CalledProcessError:
-            pm = []
-        pacsync = "\n".join(pm).replace("\n    ", " »» ").splitlines()
-        pattern = r"^([^ ]+?)/([^ ]+?) ([^ ]+?)(?: \((.+?)\))?(?: \[(installed)(?:\]|: ([^ ]+?)\]))? »» (.+)$"
-        return [
-            Pkg.Row(*re.match(pattern, entry).groups())
-            for entry in pacsync if self.regex.search(entry)
-        ]
-
-
-    def search(self, search="."):
-        """
-        Perform a search in local and remot databases.
-        The results are stored in self.rows. Use to_*() functions to retrieve.
-        """
-        self.regex = re.compile(search, re.IGNORECASE)
-        self._cols = None
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            f1 = executor.submit(self._get_foreign)
-            f2 = executor.submit(self._get_sync)
-            self.rows = f1.result() + f2.result()
-            self.rows.sort(key=lambda x: x.pkg)
 
 
     def to_json(self):
@@ -466,8 +416,7 @@ class Pkg:
         return ret
 
 
-    @classmethod
-    def filelist(cls, name, width=80, height=25):
+    def filelist(self, name, width=80, height=25):
         """
         Show filelist for package.
         pkgfile is faster but may be not installed.
@@ -475,14 +424,240 @@ class Pkg:
         """
         last = ""
         res = []
+        packagefiles = self._get_packagefiles(name, width, height)
+        if len(packagefiles) < 1: return ["Package contains no files"]
+        for s in packagefiles:
+            if s.endswith("/"): continue    # do not list plain directories
+            p, f = s.rsplit("/", maxsplit=1)
+            if p != last:
+                if last: res += [""]
+                last = p
+                res += [(p, Style.pkg)]
+            res += ["  " + f]
+        return columnize(res, width, height)
+
+    
+    # Implement these:
+    def _get_installed(self): pass
+    def search(self, search="."): pass
+    def _get_packagefiles(self, name, width=80, height=25): pass
+    def info(self, name, width=80, height=25): pass
+    def updateDB(self): pass
+
+
+#┌─────────────────────────────────────────────────────────────────────────────┐
+#│                      Custom Formats for Apt and Pacman                      │
+#└─────────────────────────────────────────────────────────────────────────────┘
+class AptPkg(Pkg):
+    def __init__(self):
+        super().__init__()
+        import apt
+        apt.apt_pkg.init()
+
+        #AptPkg.Cache = apt.Cache()
+        class NotI386Filter(apt.cache.Filter):
+            def apply(self, pkg):
+                return not pkg.name.endswith(":i386")
+        AptPkg.Cache = apt.cache.FilteredCache(apt.Cache())
+        AptPkg.Cache.set_filter(NotI386Filter())
+
+
+    def _get_installed(self):
+        # Cache This!
+        if self.Installed: return
+        self.Installed = {}
+        for pkg in self.Cache:
+            if not pkg.installed: continue
+            self.Installed[pkg.name] = pkg.installed.version
+            # TODO: also add "provides" to this
+            for prov in pkg.installed.provides:
+                self.Installed[prov] = pkg.installed.version
+
+
+    def search(self, search="."):
+        """
+        Perform a search in local and remot databases.
+        The results are stored in self.rows. Use to_*() functions to retrieve.
+        """
+        self.regex = re.compile(search, re.IGNORECASE)
+        self._cols = None
+
+
+        self.rows = [Pkg.Row(
+            pkg.candidate.origins[0].component,
+            pkg.name,
+            pkg.installed.version if pkg.installed else pkg.candidate.version,
+            pkg.candidate.section,
+            "installed" if pkg.installed else None,
+            pkg.candidate.version if pkg.installed and pkg.candidate.version != pkg.installed.version else None,
+            pkg.candidate.summary
+        ) for pkg in self.Cache if pkg.candidate is not None and self.regex.search(pkg.name + "\t" + pkg.candidate.summary)]
+        self.rows.sort(key=lambda x: x.pkg)
+
+
+    def _get_packagefiles(self, name, width=80, height=25):
         try:
-            packagefiles = pacman(["-Qlq", name])
+            return [s.split(": ", maxsplit=2)[1] for s in cmd("apt-file", ["list", name])]
+        except Exception as e:
+            return str(e).splitlines()
+
+
+    def info(self, name, width=80, height=25):
+        """
+        show fancy package-info.
+        Highlight installed packages.
+        """
+        if width < 40: return ["Width too small"]
+        if name not in self.Cache: return [f"No such package »{name}«"]
+
+        # ignore this (partly used in header):
+        #hfields = ("Repository", "Name", "Version", "Description", "Groups", "Licenses")
+        # Dies sind Paketlisten und werden anders formatiert:
+        plists = ("Depends On", "Required By", "Optional For", "Replaces", "Conflicts With")
+
+        if not self.Installed: self._get_installed()
+        p = self.Cache[name].candidate
+
+        CW = 17  # number of chars for left column
+
+        origin = fg(p.origins[0].archive, Style.grps) + "  /  " +\
+                 fg(p.origins[0].component, Style.grps) + "  /  " +\
+                 fg(p.section, Style.grps)
+
+        def pkgcol(what):
+            if type(what) is str:    # for provides
+                nom = what
+            else:
+                nom = what[0].name  # for dependency & recommends.
+            return fg(nom, Style.ins if nom in self.Installed else Style.pkg)
+
+        required = set() # reverse deps are a bit costly: we have to iterate!
+        for othr in self.Cache:
+            if not othr.installed: continue
+            if name in (d[0].name for d in othr.installed.dependencies):
+                required.add(othr.name)
+
+        provides    = columnize([pkgcol(dep) for dep in p.provides], width - CW)
+        depends     = columnize([pkgcol(dep) for dep in p.dependencies], width - CW)
+        recommends  = columnize([pkgcol(dep) for dep in p.recommends], width - CW)
+        required    = columnize([pkgcol(dep) for dep in required], width - CW)
+
+        def addif(title, stuff):
+            if len(stuff) == 0: return []
+            return [""] + [fg(title.ljust(CW-2), 14) + ": " + stuff[0]] +\
+                   [" "*CW + x for x in stuff[1:]]
+
+        depblocks = [
+            ] + addif("Provides    ", provides) + [
+            ] + addif("Depends On  ", depends) + [
+            ] + addif("Recommends  ", recommends) + [
+            ] + addif("Required By ", required) + [
+        ]
+
+        # reduce width if possible
+        width = min(
+            width,
+            max(
+                width//2,
+                len(name + p.version) - 1,
+                alen(origin),
+                max(alen(x) for x in depblocks) if len(depblocks) > 0 else 0
+            )
+        )
+        BR = " "*width
+
+        result = [
+            fg(name, Style.ins if self.Cache[name].installed else Style.pkg) + " " +
+            fg(p.version, Style.ver) + " " * (width - len(name + p.version) - 1),
+            BR,
+            origin + " " * (width - alen(origin)),
+            BR,
+            ] + [fg(f"{v:{width}}", 154) for v in wrap(p.summary, width)] + [
+            ] + [f"{v:{width}}" for v in wrapml(p.description, width)] + [
+            BR,
+            fg("Architecture".ljust(CW-2), 14) + ": " + p.architecture.ljust(width - CW),
+            fg("URL         ".ljust(CW-2), 14) + ": " + p.homepage.ljust(width - CW),
+            fg("Size        ".ljust(CW-2), 14) + ": " + byte2hr(p.size).ljust(width - CW),
+        ] + [x + " " * (width - alen(x)) for x in depblocks]
+        return result
+
+
+    def updateDB(self):
+        sudocmd("apt", ["update"])
+
+
+    def install(self, pkglist): sudocmd("apt", ["install"] + pkglist)
+
+
+    def uninstall(self, pkglist): sudocmd("apt", ["autopurge"] + pkglist)
+
+
+class PacPkg(Pkg):
+    def _get_installed(self):
+        if self.Installed: return
+        self.Installed = dict(x.split() for x in cmd("pacman", ["-Q"]))
+        # "Provided" packagenames/version. Etwas langsamer.
+        for x in cmd("pacman", ["-Qi"]):
+            if not x.startswith("Provides") or x.endswith("None"): continue
+            for y in x.split(" : ")[1].split():
+                pv = y.split("=")
+                if pv[0] not in self.Installed:
+                    self.Installed[pv[0]] = pv[1] if len(pv) > 1 else None
+
+
+    def search(self, search="."):
+        """
+        Perform a search in local and remot databases.
+        The results are stored in self.rows. Use to_*() functions to retrieve.
+        """
+        def get_foreign():
+            rows = []
+            cur = {}
+            for l in cmd("pacman", ["-Qmi"]):
+                if l:       # collect info
+                    if ":" not in l: continue
+                    cur.update(((x.strip() for x in l.split(":", 1)),))
+                elif cur:   # new entry is about to start
+                    cur['Groups'] = cur['Groups'].replace('None', '')
+                    gr_ds = f"{cur['Groups']} {cur['Name']} {cur['Description']}"
+                    if self.regex.search(gr_ds):
+                        rows += [Pkg.Row(Style.ext_str, cur["Name"], cur["Version"],
+                            cur["Groups"] or None, "installed", None, cur["Description"]
+                        )]
+                    cur = {}
+            return rows
+
+        def get_sync():
+            # repack 2 consecutive lines
+            try:
+                pm = cmd("pacman", ["-Ss", self.regex.pattern])
+            except subprocess.CalledProcessError:
+                pm = []
+            pacsync = "\n".join(pm).replace("\n    ", " »» ").splitlines()
+            pattern = r"^([^ ]+?)/([^ ]+?) ([^ ]+?)(?: \((.+?)\))?(?: \[(installed)(?:\]|: ([^ ]+?)\]))? »» (.+)$"
+            return [
+                Pkg.Row(*re.match(pattern, entry).groups())
+                for entry in pacsync if self.regex.search(entry)
+            ]
+
+        self.regex = re.compile(search, re.IGNORECASE)
+        self._cols = None
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            f1 = executor.submit(get_foreign)
+            f2 = executor.submit(get_sync)
+            self.rows = f1.result() + f2.result()
+            self.rows.sort(key=lambda x: x.pkg)
+
+
+    def _get_packagefiles(self, name, width=80, height=25):
+        try:
+            return cmd("pacman", ["-Qlq", name])
         except subprocess.CalledProcessError:
             try:      # try pkgfile first (is faster) but may be not installed
-                packagefiles = pacman(["-lq", name], "pkgfile")
+                return cmd("pkgfile", ["-lq", name])
             except FileNotFoundError:
                 try:
-                    packagefiles = pacman(["-Flq", name])
+                    return cmd("pacman", ["-Flq", name])
                 except subprocess.CalledProcessError as spe:
                     err = [f"pacman returned exitcode {spe.returncode}",""]
                     err += spe.stdout.splitlines() + spe.stderr.splitlines()
@@ -492,31 +667,18 @@ class Pkg:
                 err += spe.stdout.splitlines() + spe.stderr.splitlines()
                 return columnize(err, width, height)
 
-        if len(packagefiles) < 1: return ["Package contains no files"]
 
-        for s in packagefiles:
-            if s.endswith("/"): continue    # do not list plain directories
-            p, f = s.rsplit("/",1)
-            if p != last:
-                if last: res += [""]
-                last = p
-                res += [(p, Style.pkg)]
-            res += ["  " + f]
-        return columnize(res, width, height)
-
-
-    @classmethod
-    def info(cls, name, width=80, height=25):
+    def info(self, name, width=80, height=25):
         """
         show fancy package-info.
         Highlight installed packages.
         """
         if width < 40: return ["Width too small"]
         try:
-            pacinfo = pacman(["-Qi", name])
+            pacinfo = cmd("pacman", ["-Qi", name])
         except subprocess.CalledProcessError:
             try:  # maybe a foreign package
-                pacinfo = pacman(["-Sii", name])
+                pacinfo = cmd("pacman", ["-Sii", name])
             except subprocess.CalledProcessError as spe:
                 err = [f"pacman returned exitcode {spe.returncode}",""]
                 err += spe.stdout.splitlines() + spe.stderr.splitlines()
@@ -529,20 +691,20 @@ class Pkg:
         # Dies sind Paketlisten und werden anders formatiert:
         plists = ("Depends On", "Required By", "Optional For", "Replaces", "Conflicts With")
 
-        if not cls.Installed: cls._get_installed()
+        if not self.Installed: self._get_installed()
 
         # TODO: check version instead of ignoring
         def nover(x):
-            return re.split("[<=>]", x, 1)[0]
+            return re.split("[<=>]", x, maxsplit=1)[0]
 
         def getnover(x):
-            return nover(x), Style.ins if nover(x) in cls.Installed else Style.pkg
+            return nover(x), Style.ins if nover(x) in self.Installed else Style.pkg
 
         info = {}
         last = ""
         for l in pacinfo:
             if ":" in l and l[0] != " ":
-                k, v = l.split(":", 1)
+                k, v = l.split(":", maxsplit=1)
                 last = k.strip()
             else:
                 v = l
@@ -560,9 +722,9 @@ class Pkg:
             for r in v.split("\n"):
                 lw = [x for x in wrap(r, width - CW)]
                 if k == "Optional Deps":
-                    odh = lw[0].split(": ", 1)
+                    odh = lw[0].split(": ", maxsplit=1)
                     if len(odh) == 2:
-                        lw[0] = f"{fg(odh[0], Style.pkg if odh[0] not in cls.Installed else Style.ins)}: {odh[1]}"
+                        lw[0] = f"{fg(odh[0], Style.pkg if odh[0] not in self.Installed else Style.ins)}: {odh[1]}"
                 elif k in plists:   # colorize package-list
                     lw = columnize([getnover(x) for x in r.split()], width - CW)
 
@@ -580,7 +742,7 @@ class Pkg:
         # reduce width if possible
         width = min(width, max(alen(x) for x in fancyinfo))
         result = [
-            fg(info['Name'], Style.pkg if info['Name'] not in cls.Installed else Style.ins) + " " +
+            fg(info['Name'], Style.pkg if info['Name'] not in self.Installed else Style.ins) + " " +
             fg(info['Version'], Style.ver) + " " * (width - len(info['Name'] + info['Version']) - 1)
         ]
         if "Groups" in info:
@@ -597,14 +759,20 @@ class Pkg:
         return result
 
 
-    @classmethod
-    def updateDB(cls):
-        sudopacman(["-Sy"])
+    def updateDB(self):
+        sudocmd("pacman", ["-Sy"])
         try:
-            pacman(["-V"], "pkgfile")
-            sudopacman(["-u"], "pkgfile")
+            cmd("pkgfile", ["-V"])
+            sudocmd("pkgfile", ["-u"])
         except:
-            sudopacman(["-Fy"])
+            sudocmd("pacman", ["-Fy"])
+
+
+    def install(self, pkglist): sudocmd("pacman", ["-Rsc"] + pkglist)
+
+
+    def uninstall(self, pkglist): sudocmd("pacman", ["-S"] + pkglist)
+
 
 
 #┌─────────────────────────────────────────────────────────────────────────────┐
@@ -827,7 +995,7 @@ class LineSelect():
             scr.timeout(100)    # reset getch-timeout to 100
 
         def updateDB():
-            Pkg.updateDB();
+            self.pkg.updateDB()
             # reload package list but keep selection & cursor
             self.pkg.search(self.pkg.regex.pattern)
             self.items = self.pkg.to_list(self.cols-1)[1:]
@@ -874,8 +1042,8 @@ class LineSelect():
                     if mous[4] == curses.BUTTON1_CLICKED: self.cursor = self.ymap[mous[2]-1]
 
                 # Hotkeys
-                case curses.KEY_F1:     showinfo(Pkg.info)                      # 265
-                case curses.KEY_F2:     showinfo(Pkg.filelist)                  # 266
+                case curses.KEY_F1:     showinfo(self.pkg.info)                 # 265
+                case curses.KEY_F2:     showinfo(self.pkg.filelist)             # 266
                 case curses.KEY_F5:     result, loop = updateDB, False          # 269
                 case 10:                result, loop = self.cursor, False       # return
                 case 32:                toggle(self.cursor); self.cursor += 1   # space
@@ -918,8 +1086,8 @@ class LineSelect():
                     print("\n".join("\n".join(self.items[s]) for s in pkghin))
                     print()
 
-                if pkgwech: sudopacman(["-Rsc"] + [self.pkg.rows[s].pkg for s in pkgwech])
-                if pkghin: sudopacman(["-S"] + [self.pkg.rows[s].pkg for s in pkghin])
+                if pkgwech: self.pkg.uninstall([self.pkg.rows[s].pkg for s in pkgwech])
+                if pkghin:  self.pkg.install([self.pkg.rows[s].pkg for s in pkghin])
                 break
             else:
                 if not self.doscrollbar:
@@ -937,7 +1105,7 @@ if __name__ == '__main__':
             return ''.join("\n".join(wrap(p, w))+'\n' for p in t.split('\n\n'))
 
     parser = argparse.ArgumentParser(formatter_class=MultiForm, description="""
-        Search for packages with pacman and show results in an interactive
+        Search for packages with pacman or apt and show results in an interactive
         list. Installed packages are highlighted/marked and available updates
         are shown as well.
 
@@ -964,7 +1132,7 @@ if __name__ == '__main__':
         If stdout is not a terminal, width will default to 80.
     """)
     group.add_argument("-i", "--info", action="store_true", help="""
-        Show package info instead of searchresults. 
+        Show package info instead of searchresults.
         Searchterm must be the exact packagename (or yield exactly one result)
     """)
     args = parser.parse_args()
@@ -977,7 +1145,13 @@ if __name__ == '__main__':
         ts = os.get_terminal_size()
         w, h = ts.columns, ts.lines
 
-    pkg = Pkg()
+    # Try Autodetecting PACKAGE MANAGER                      │
+    PkgMgr = None
+    if checkcmd("apt") and not checkcmd("pacman"): PkgMgr = AptPkg
+    if checkcmd("pacman") and not checkcmd("apt"): PkgMgr = PacPkg
+    assert PkgMgr is not None, "Could not detect packagemanager"
+    
+    pkg = PkgMgr()
     pkg.search(args.searchterm[0])
     if len(pkg.rows) == 0: sys.exit(1)  # nothing found
 

@@ -37,9 +37,9 @@ Eg. `fd -i 'filename' | preview` or `locate -i 'filename' | preview`
 
 ### pms.py
 
-Search for packages with pacman.
+Search packages with pacman or apt.
 
-Show results in an interactive list, allowing for installation.
+Show results in an interactive list, allowing for (de)installation.
 
 Other output options are available (JSON, CSV).
 
