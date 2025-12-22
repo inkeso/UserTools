@@ -616,7 +616,7 @@ class PacPkg(Pkg):
             for l in cmd("pacman", ["-Qmi"]):
                 if l:       # collect info
                     if ":" not in l: continue
-                    cur.update(((x.strip() for x in l.split(":", 1)),))
+                    cur.update(((x.strip() for x in l.split(":", maxsplit=1)),))
                 elif cur:   # new entry is about to start
                     cur['Groups'] = cur['Groups'].replace('None', '')
                     gr_ds = f"{cur['Groups']} {cur['Name']} {cur['Description']}"
@@ -768,10 +768,12 @@ class PacPkg(Pkg):
             sudocmd("pacman", ["-Fy"])
 
 
-    def install(self, pkglist): sudocmd("pacman", ["-Rsc"] + pkglist)
+    def uninstall(self, pkglist): 
+        sudocmd("pacman", ["-Rsc"] + pkglist)
 
 
-    def uninstall(self, pkglist): sudocmd("pacman", ["-S"] + pkglist)
+    def install(self, pkglist): 
+        sudocmd("pacman", ["-S"] + pkglist)
 
 
 
@@ -1064,7 +1066,7 @@ class LineSelect():
 
         def header(s, c):
             s = f"──══▶ {s} ◀══──"
-            print(csi(Style.selected[c])+hl(fg(f"{s:^{self.cols}}", 15), 1)+csi())
+            print(csi(Style.selected[c])+hl(fg(f"{s:^{self.cols-1}}", 15), 1)+csi())
 
         while True:
             res = curses.wrapper(self.mainloop)
@@ -1091,7 +1093,7 @@ class LineSelect():
                 break
             else:
                 if not self.doscrollbar:
-                    self.pkg.to_ansi(self.cols)
+                    self.pkg.to_ansi(self.cols-1)
                 break
 
 
