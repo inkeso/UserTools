@@ -11,6 +11,11 @@ Just the Gtk3 colorpicker (but preset to the color in clipboard). Picked color
 will be written to stdout and clipboard (and primary). Needs xclip.
 
 
+### `colign.py`
+
+An interactive GUI to align text in columns. Text is read from stdin, split into column with custom regexp, than output to stdout.
+
+
 ### `colorterminal.py`
 
 Show ANSI-Colors in terminal. 
