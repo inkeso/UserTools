@@ -108,7 +108,7 @@ class Confirm:
             buttonlabl = f" {ostr:^{self.bwidth}} "
             if i in self.syektoh:
                 c = self.syektoh[i]
-                buttonlabl = re.sub(c, "\x1b[4m\\g<0>\x1b[24m", buttonlabl, 1, re.I)
+                buttonlabl = re.sub(c, "\x1b[4m\\g<0>\x1b[24m", buttonlabl, count=1, flags=re.I)
             displ[0] += f"{brg}{B[0][0:2]}{B[0][1:2]*self.bwidth}{B[0][1:3]}\x1b[m "
             displ[1] += f"{brg}{B[1][0:1]}{face}{buttonlabl}{drk}{B[1][2:3]}\x1b[m "
             displ[2] += f"{drk}{B[2][0:2]}{B[2][1:2]*self.bwidth}{B[2][1:3]}\x1b[m "
