@@ -9,6 +9,7 @@ from gi.repository import Gtk, Gdk, GLib, WebKit2, GdkPixbuf
 parser = argparse.ArgumentParser()
 parser.add_argument("URL", help="URL", nargs="?")
 for ao in [ 
+    ["--borderless",  False,                "Do not draw window decoration"],
     ["--no-escape",   False,                "Do not Exit on Escape"],
     ["--title",       '',                   "Window title. Defaults to URL."],
     ["--geometry",    '1024x768+center',    "Window geometry. "
@@ -62,6 +63,9 @@ if not args.no_escape: # Exit on escape?
 
 broz.window.set_title(args.URL if not args.title else args.title)
 if args.icon: broz.window.set_icon(GdkPixbuf.Pixbuf.new_from_file(args.icon))
+
+if args.borderless:
+    broz.window.set_decorated(False)
 
 # Assign thumb-Buttons
 def click(widget, event):
