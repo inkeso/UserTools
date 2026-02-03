@@ -9,18 +9,19 @@ from gi.repository import Gtk, Gdk, GLib, WebKit2, GdkPixbuf
 parser = argparse.ArgumentParser()
 parser.add_argument("URL", help="URL", nargs="?")
 for ao in [ 
-    ["--borderless",  False,                "Do not draw window decoration"],
-    ["--no-escape",   False,                "Do not Exit on Escape"],
-    ["--title",       '',                   "Window title. Defaults to URL."],
-    ["--geometry",    '1024x768+center',    "Window geometry. "
-                                            "<Width>x<Height>[+<x+y|center>]"],
-    ["--icon",        '',                   "Set icon from imagefile"],
-    ["--javascript",  '',                   "Start some javascript after loading. May be a long string containing JS or a filename."],
-    ["--css",         '',                   "Apply user-css. May be a long string containing CSS or a filename."],
+    ["--borderless", '-b', False,                "Do not draw window decoration"],
+    ["--no-escape",  '-n', False,                "Do not Exit on Escape"],
+    ["--title",      '-t', '',                   "Window title. Defaults to URL."],
+    ["--geometry",   '-g', '1024x768+center',    "Window geometry. "
+                                                 "<Width>x<Height>[+<x+y|center>]"],
+    ["--icon",       '-i', '',                   "Set icon from imagefile"],
+    ["--javascript", '-j', '',                   "Start some javascript after loading. May be a long string containing JS or a filename."],
+    ["--css",        '-c', '',                   "Apply user-css. May be a long string containing CSS or a filename."],
+    ["--cookies",    '-o', '',                   "Keep cookies in a file"],
     ]:
-    if type(ao[1]) == bool: prm = { 'action': "store_true" }
-    else: prm = { 'type': type(ao[1]), 'default': ao[1] }
-    parser.add_argument(ao[0][1:3], ao[0], help=ao[2], **prm)
+    if type(ao[2]) == bool: prm = { 'action': "store_true" }
+    else: prm = { 'type': type(ao[2]), 'default': ao[2] }
+    parser.add_argument(ao[1], ao[0], help=ao[3], **prm)
 args = parser.parse_args()
 
 if args.URL is None:
@@ -48,6 +49,11 @@ style = WebKit2.UserStyleSheet(
     WebKit2.UserStyleLevel.USER
 )
 manager.add_style_sheet(style)
+
+if args.cookies:
+    context = WebKit2.WebContext.get_default()
+    cookies = context.get_cookie_manager()
+    cookies.set_persistent_storage(args.cookies, WebKit2.CookiePersistentStorage.TEXT)
 
 broz = WebKit2.WebView.new_with_user_content_manager(manager)
 
