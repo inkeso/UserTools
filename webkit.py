@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import sys, gi, argparse
+# mache ein webkit-fenster, lade zeuch, mit rediercts und alles, beende 
+# wenn ziel-string, gib den zurück. Vielleicht gehts ja sogar ohne Output...
+
+import sys, gi, argparse, re
 gi.require_version('WebKit2', '4.0')
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, WebKit2, GdkPixbuf
@@ -18,6 +21,8 @@ for ao in [
     ["--javascript", '-j', '',                   "Start some javascript after loading. May be a long string containing JS or a filename."],
     ["--css",        '-c', '',                   "Apply user-css. May be a long string containing CSS or a filename."],
     ["--cookies",    '-o', '',                   "Keep cookies in a file"],
+    ["--quitstring", '-q', '',                   "Quit when regex matches in document. Print sourcecode to stdout. May be used in scripts instead of curl or wget, to circumvent captchas and bot-detections."],
+    ["--nogui",      '-x', False,                "Don't show Window. Mainly useful with -q"],
     ]:
     if type(ao[2]) == bool: prm = { 'action': "store_true" }
     else: prm = { 'type': type(ao[2]), 'default': ao[2] }
@@ -85,6 +90,9 @@ def ready(widget, event):
     if event is WebKit2.LoadEvent.FINISHED:
         broz.finished = True
         broz.disconnect(broz.onready)
+        if args.quitstring:
+            checkpage(widget, event)
+            broz.onready = broz.connect("load-changed", checkpage)
         return
 
 def loading():
@@ -102,10 +110,32 @@ def loading():
     )
     return False
 
+
+def havedata(resource, result, user_data):
+    try:
+        data = resource.get_data_finish(result)
+        html = data.decode('utf-8', errors='replace')
+    except Exception as e:
+        print("Error getting data:", e)
+    
+    try: 
+        # curently, we don't care about matched result, we just return the
+        # whole page if quitstring is found.
+        # We could expand this into "just return match(es)" if needed.
+        next(re.finditer(args.quitstring, html))
+        print(html)
+        GLib.idle_add(broz.window.destroy)
+    except StopIteration: pass  # not found
+
+
+def checkpage(widget, event):
+    mr = widget.get_main_resource()
+    if mr: mr.get_data(None, havedata, None)
+
 GLib.timeout_add(100, loading)
 broz.onready = broz.connect("load-changed", ready)
 broz.load_uri(args.URL)
-broz.window.show_all()
+if not args.nogui: broz.window.show_all()
 
 # parse and set Position
 try:
