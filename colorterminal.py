@@ -13,16 +13,16 @@ def banner(s):
     echo(spc + "{0}95m└{1:─<%d}┘\n" % (len(s) + 2), "")
 
 def c16(show_banner=True):
-   if show_banner: banner("ANSI-Colors")
-   for f in range(8):
-       for t in (3,9):
-           for b in range(8):
-               echo("{0}{3}{1};4{2}m {1}/{2} {0}{3}{1};10{2}m {1}/{2} {0}0m", f,b,t)
-           echo("\n")
-   echo("\nset FG/BG/SGR: ESC[__m    ESC[__;__m    0=reset             9=default\n")
-   echo("{0}36m30..37 FG normal    {0}96m90..97 FG bright    {0}37;44m40..47 BG normal{0}0m    {0}37;104m100..107 BG bright{0}0m\n")
-   echo(" {0}1m1=bold{0}0m     {0}3m3=italic{0}0m     {0}4m4=underline{0}0m     {0}5m5=blink{0}0m     {0}7m7=reverse{0}0m     {0}9m9=crossed{0}0m\n")
-   echo("{0}22m22=nobold{0}0m  {0}23m23=noitalic{0}0m  {0}24m24=nounderline{0}0m  {0}25m25=noblink{0}0m  {0}27m27=noreverse{0}0m  {0}29m29=nocrossed{0}0m\n")
+    if show_banner: banner("ANSI-Colors")
+    for f in range(8):
+        for t in (3,9):
+            for b in range(8):
+                echo("{0}{3}{1};4{2}m {1}/{2} {0}{3}{1};10{2}m {1}/{2} {0}0m", f,b,t)
+            echo("\n")
+    echo("\nset FG/BG/SGR: ESC[__m    ESC[__;__m    0=reset             9=default\n")
+    echo("{0}36m30..37 FG normal    {0}96m90..97 FG bright    {0}37;44m40..47 BG normal{0}0m    {0}37;104m100..107 BG bright{0}0m\n")
+    echo(" {0}1m1=bold{0}0m     {0}3m3=italic{0}0m     {0}4m4=underline{0}0m     {0}5m5=blink{0}0m     {0}7m7=reverse{0}0m     {0}9m9=crossed{0}0m\n")
+    echo("{0}22m22=nobold{0}0m  {0}23m23=noitalic{0}0m  {0}24m24=nounderline{0}0m  {0}25m25=noblink{0}0m  {0}27m27=noreverse{0}0m  {0}29m29=nocrossed{0}0m\n")
 
 def c256(show_banner=True):
     if show_banner: 
@@ -41,7 +41,7 @@ def c256(show_banner=True):
         echo(" ")
         # gray "bg fg"
         if r < 24: [echo(feld, x, r+232) for x in (3,4)]
-        echo("\n")
+        echo()
     echo("\n{0}0m0-7: standard colors (ESC[30-37m) / 8-15: high intensity colors (ESC[90-97m)\n")
     echo("16-231:  6×6×6 cube (216 colors): 16 + 36·r + 6·g + b (0 ≤ r,g,b ≤ 5)\n")
     echo("232-255: grayscale from black to white in 24 steps\n")
@@ -69,10 +69,38 @@ def call():
     crgb()
 
 def keen(): 
-    c16(False)
+    for b in (0, 1):
+        for f in range(8):
+            for t in (3,9):
+                echo("{0}{1}{2}m {2} {0}0m", t+b, f)
+        echo("\n")
+    echo("{0}36m3x FG norm  {0}96m9x FG lite   {0}37;44m4x BG norm{0}0m  {0}37;104m10x BG lite{0}0m\n")
     echo()
-    c256(False)
-    echo("({0}38;2;255;0;0mR{0}0m,{0}38;2;0;255;0mG{0}0m,{0}38;2;0;0;255mB{0}0m = 0..255) set BG with ESC[48;2;R;G;Bm   |   FG with ESC[38;2;R;G;Bm  ")
+    def mecho(a,b, restyle_first_digit=True):
+        c = "{0:3}".format(b) if b > 9 else "{0:^3}".format(b)
+        if restyle_first_digit:
+            if c[0] == "1": c = "⒈"+c[1:]
+            if c[0] == "2": c = "⒉"+c[1:]
+        echo("{0}{1}8;5;{2}m{3}{0}0m", a, b, c)
+    
+    for r in range(36):
+        # first column 0-15 standard colors (BG & FG)
+        if r < 16: mecho(4, r, False)
+        elif r > 16 and r <= 32: mecho(3, r-17, False)
+        else: echo(" "*3)
+        echo(" ")
+        # second & thrid column: 218 6x6x6 rgb cube
+        for c in range(6): mecho(3, r*6+16+c)
+        echo(" ")
+        for c in range(6): mecho(4, r*6+16+c)
+        echo(" ")
+        # gray "bg fg"
+        if r < 24: [mecho(x, r+232, False) for x in (3,4)]
+        echo()
+    echo("    {0}36m38;5;___ set FG    {0}37;44m48;5;___ set BG{0}0m\n\n")
+    echo(" {0}1m1/22=bold{0}0m {0}3m3/23=italic{0}0m {0}4m4/24=underline{0}0m {0}5m5/25=blink{0}0m\n")
+    echo(" {0}7m7/27=reverse{0}0m {0}9m9/29=crossed{0}0m   0=reset   9=default\n")
+    echo("({0}38;2;255;0;0mR{0}0m,{0}38;2;0;255;0mG{0}0m,{0}38;2;0;0;255mB{0}0m = 0..255) set with ESC[38/48;2;R;G;Bm")
     #block / swallow input
 
     import tty, termios
